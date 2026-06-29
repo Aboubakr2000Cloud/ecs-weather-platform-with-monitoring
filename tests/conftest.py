@@ -13,6 +13,6 @@ def mock_db(monkeypatch):
 
     mock_cursor.fetchall.return_value = []
 
-    monkeypatch.setattr(app_module, "get_db_with_retry", lambda: mock_conn)
+    monkeypatch.setattr(app_module, "get_db", lambda: mock_conn)
 
     return mock_conn
