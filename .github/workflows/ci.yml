@@ -85,7 +85,7 @@ jobs:
         continue-on-error: true   # warn, don't fail on medium issues
 
       - name: Dependency vulnerability check (safety)
-        run: safety check -r app/requirements.txt
+        run: safety check -r requirements.txt
         continue-on-error: true   # warn for now
 
       - name: Scan Terraform with Checkov
