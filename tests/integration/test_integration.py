@@ -1,10 +1,6 @@
-import pytest
 import pymysql
 import os
-import json
-import sys
-
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../app"))
+from app import app as flask_app
 
 
 def get_db():

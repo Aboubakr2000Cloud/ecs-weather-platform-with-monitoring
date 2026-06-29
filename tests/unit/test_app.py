@@ -1,11 +1,5 @@
-import pytest
-import json
-import sys
-import os
-
-# Add app directory to path
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), "../../app"))
-
+from app import app as flask_app
+import os 
 
 def test_health_endpoint_structure(client):
     """Health endpoint returns correct JSON structure"""
@@ -38,7 +32,6 @@ def test_history_endpoint_returns_list(client, mock_db):
 @pytest.fixture
 def client():
     """Flask test client with test config"""
-    import app as flask_app
 
     flask_app.app.config["TESTING"] = True
     # Set dummy env vars for testing

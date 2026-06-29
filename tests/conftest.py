@@ -1,6 +1,7 @@
-import pytest
 from unittest.mock import MagicMock
-import app
+
+import pytest
+from app import app as flask_app
 
 
 @pytest.fixture
@@ -12,6 +13,6 @@ def mock_db(monkeypatch):
 
     mock_cursor.fetchall.return_value = []
 
-    monkeypatch.setattr(app, "get_db_with_retry", lambda: mock_conn)
+    monkeypatch.setattr(flask_app, "get_db_with_retry", lambda: mock_conn)
 
     return mock_conn

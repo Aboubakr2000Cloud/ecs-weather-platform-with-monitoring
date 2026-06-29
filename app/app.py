@@ -72,7 +72,7 @@ def health():
 @app.route("/weather/<city>")
 def get_weather(city):
     api_key = os.environ.get("WEATHER_API_KEY")
-    url = f"https://api.openweathermap.org/data/2.5/weather"
+    url = "https://api.openweathermap.org/data/2.5/weather"
 
     response = requests.get(
         url, params={"q": city, "appid": api_key, "units": "metric"}, timeout=10
