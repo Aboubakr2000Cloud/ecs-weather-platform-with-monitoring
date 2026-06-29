@@ -50,10 +50,11 @@ jobs:
       - name: Terraform validate
         run: terraform -chdir=terraform validate
 
-      - name: TFLint (Terraform linter)
+      - name: Setup TFLint
         uses: terraform-linters/setup-tflint@v4
-        then:
-        - run: tflint -chdir=terraform  
+        
+      - name: Run TFLint
+        run: tflint -chdir=terraform  
 
       - name: Lint Dockerfile (hadolint)
         uses: hadolint/hadolint-action@v3.1.0
