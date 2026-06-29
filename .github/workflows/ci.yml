@@ -111,6 +111,19 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt pytest pytest-cov
 
+      - name: Debug workspace
+        run: |
+          pwd
+          ls -la
+          find . -maxdepth 2 -type f
+
+      - name: Debug Python
+        run: |
+          python --version
+          python -c "import sys; print(sys.path)"
+          python -c "import os; print(os.getcwd())"
+          python -c "import app; print(app)"
+
       - name: Run unit tests
         run: pytest tests/unit/ -v --cov=app --cov-report=xml --cov-report=term
 

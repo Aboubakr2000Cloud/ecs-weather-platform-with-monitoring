@@ -1,6 +1,5 @@
 import pymysql
 import os
-from app import app as flask_app
 
 
 def get_db():
