@@ -109,15 +109,17 @@ jobs:
           key: ${{ runner.os }}-pip-${{ hashFiles('**/requirements.txt') }}
 
       - name: Install dependencies
-        run: pip install -r requirements.txt pytest pytest-cov
-      
-      - name: Debug import app.app
         run: |
-          python -c "import app; print('app OK')"
-          python -c "import app.app; print('app.app OK')"
-
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+      
+      - name: Debug conftest import
+        run: |
+          python -c "import tests.conftest; print('conftest imported OK')"
+      
       - name: Run unit tests
-        run: pytest tests/unit/ -v --cov=app --cov-report=xml --cov-report=term
+        run: |
+          python -m pytest tests/unit/ -v -s
 
       - name: Upload coverage
         uses: actions/upload-artifact@v4

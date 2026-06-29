@@ -101,7 +101,7 @@ resource "aws_ecs_service" "this" {
   deployment_controller {
     type = "ECS"
   }
-  
+
   lifecycle {
     ignore_changes = [
       task_definition
