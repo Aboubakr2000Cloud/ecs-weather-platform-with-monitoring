@@ -128,8 +128,6 @@ jobs:
       - detect-changes
       - load-infrastructure-context
 
-    if: needs.detect-changes.outputs.terraform_changed == 'true'
-
     runs-on: ubuntu-latest
 
     environment: production
