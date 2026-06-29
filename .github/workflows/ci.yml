@@ -115,10 +115,6 @@ jobs:
           python -m pip install --upgrade pip
           python -m pip install -r requirements.txt
       
-      - name: Debug conftest import
-        run: |
-          python -c "import tests.conftest; print('conftest imported OK')"
-      
       - name: Run unit tests
         run: |
           python -m pytest tests/unit/ -v -s
@@ -159,7 +155,9 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
 
       - name: Install dependencies
-        run: pip install -r requirements.txt pytest
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
 
       - name: Run migrations
         env:
@@ -175,7 +173,8 @@ jobs:
           DB_PASSWORD: apppass
           DB_NAME: weatherapp
           WEATHER_API_KEY: test-key
-        run: pytest tests/integration/ -v
+        run: | 
+          python -m pytest tests/integration/ -v
 
 # ── Docker Build Verification ─────────────────────────────────────
 
