@@ -55,7 +55,8 @@ jobs:
         uses: terraform-linters/setup-tflint@v4
         
       - name: Run TFLint
-        run: tflint -chdir=terraform  
+        working-directory: terraform
+        run: tflint --recursive  
 
       - name: Lint Dockerfile (hadolint)
         uses: hadolint/hadolint-action@v3.1.0
