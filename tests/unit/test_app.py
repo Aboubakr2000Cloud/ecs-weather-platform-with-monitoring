@@ -1,5 +1,6 @@
 from app import app as flask_app
-import os 
+import os
+
 
 def test_health_endpoint_structure(client):
     """Health endpoint returns correct JSON structure"""
@@ -33,12 +34,12 @@ def test_history_endpoint_returns_list(client, mock_db):
 def client():
     """Flask test client with test config"""
 
-    flask_app.app.config["TESTING"] = True
+    flask_app.config["TESTING"] = True
     # Set dummy env vars for testing
     os.environ.setdefault("DB_HOST", "localhost")
     os.environ.setdefault("DB_USER", "test")
     os.environ.setdefault("DB_PASSWORD", "test")
     os.environ.setdefault("DB_NAME", "test")
     os.environ.setdefault("WEATHER_API_KEY", "test")
-    with flask_app.app.test_client() as c:
+    with flask_app.test_client() as c:
         yield c
