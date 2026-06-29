@@ -53,9 +53,9 @@ jobs:
 
       - name: Setup TFLint
         uses: terraform-linters/setup-tflint@v4
-        continue-on-error: true
         
       - name: Run TFLint
+        continue-on-error: true
         working-directory: terraform
         run: tflint --recursive  
 
