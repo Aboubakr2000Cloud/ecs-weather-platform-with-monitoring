@@ -1,0 +1,455 @@
+name: Production Deployment
+
+on:
+  push:
+    branches:
+      - main
+
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  id-token: write
+
+env:
+  AWS_REGION: ${{ vars.AWS_REGION }}
+
+  TERRAFORM_DIR: terraform
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+
+###############################################################################
+# Detect Changes
+###############################################################################
+
+  detect-changes:
+    name: Detect Changed Components
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      terraform_changed: ${{ steps.filter.outputs.terraform }}
+      app_changed: ${{ steps.filter.outputs.app }}
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Detect Changed Files
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            terraform:
+              - 'terraform/**'
+
+            app:
+              - 'app/**'
+              - 'tests/**'
+              - 'Dockerfile'
+              - 'requirements.txt'
+              - 'migrations/**'
+
+      - name: Deployment Summary
+        run: |
+          {
+            echo "## Detect Changes"
+            echo ""
+            echo "| Component | Changed |"
+            echo "|----------|---------|"
+            echo "| Terraform | ${{ steps.filter.outputs.terraform }} |"
+            echo "| Application | ${{ steps.filter.outputs.app }} |"
+          } >> $GITHUB_STEP_SUMMARY
+
+###############################################################################
+# Load Infrastructure Context
+###############################################################################
+
+  load-infrastructure-context:
+
+    name: Load Infrastructure Context
+
+    needs: detect-changes
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      ecr_repo_url: ${{ steps.outputs.outputs.ecr_repo_url }}
+      ecs_cluster_name: ${{ steps.outputs.outputs.ecs_cluster_name }}
+      ecs_service_name: ${{ steps.outputs.outputs.ecs_service_name }}
+      task_definition_family: ${{ steps.outputs.outputs.task_definition_family }}
+      alb_dns_name: ${{ steps.outputs.outputs.alb_dns_name }}
+      container_name: ${{ steps.outputs.outputs.container_name }}
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform init -backend-config=backends/dev.hcl
+
+      - name: Export Terraform Outputs
+        id: outputs
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: |
+          echo "ecr_repo_url=$(terraform output -raw ecr_repo_url)" >> $GITHUB_OUTPUT
+          echo "ecs_cluster_name=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_OUTPUT
+          echo "ecs_service_name=$(terraform output -raw ecs_service_name)" >> $GITHUB_OUTPUT
+          echo "task_definition_family=$(terraform output -raw task_definition_family)" >> $GITHUB_OUTPUT
+          echo "alb_dns_name=$(terraform output -raw alb_dns_name)" >> $GITHUB_OUTPUT
+          echo "container_name=$(terraform output -raw container_name)" >> $GITHUB_OUTPUT
+          
+###############################################################################
+# Deploy Infrastructure
+###############################################################################
+
+  deploy-infrastructure:
+
+    name: Deploy Infrastructure
+
+    needs:
+      - detect-changes
+      - load-infrastructure-context
+
+    if: needs.detect-changes.outputs.terraform_changed == 'true'
+
+    runs-on: ubuntu-latest
+
+    environment: production
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform init -backend-config=backends/dev.hcl
+
+      - name: Terraform Format Check
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform fmt -check -recursive
+
+      - name: Terraform Validate
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform validate
+
+      - name: Terraform Apply
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+          TF_VAR_weather_api_key: ${{ secrets.WEATHER_API_KEY }}
+        run: |
+          terraform apply \
+            -auto-approve \
+            -var-file=envs/dev.tfvars
+
+      - name: Deployment Summary
+        run: |
+          {
+            echo "## Infrastructure"
+            echo ""
+            echo "✅ Terraform Apply completed successfully."
+          } >> $GITHUB_STEP_SUMMARY
+          
+###############################################################################
+# Build Docker Image
+###############################################################################
+
+  build-image:
+
+    name: Build & Push Docker Image
+
+    needs:
+      - detect-changes
+      - load-infrastructure-context
+      - deploy-infrastructure
+
+    if: |
+      always() &&
+      (
+        needs.detect-changes.outputs.app_changed == 'true' ||
+        needs.detect-changes.outputs.terraform_changed == 'true'
+      ) &&
+      (
+        needs.deploy-infrastructure.result == 'success' ||
+        needs.deploy-infrastructure.result == 'skipped'
+      )
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      image_uri: ${{ steps.build.outputs.image_uri }}
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and Push Image
+        id: build
+        env:
+          ECR_REPO: ${{ needs.load-infrastructure-context.outputs.ecr_repo_url }}
+        run: |
+
+          IMAGE_URI=${ECR_REPO}:${GITHUB_SHA}
+
+          docker build -t ${IMAGE_URI} .
+
+          docker push ${IMAGE_URI}
+
+          echo "image_uri=${IMAGE_URI}" >> $GITHUB_OUTPUT
+
+      - name: Build Summary
+        run: |
+          {
+            echo "## Docker Image"
+            echo ""
+            echo "Image:"
+            echo "\`${{ steps.build.outputs.image_uri }}\`"
+          } >> $GITHUB_STEP_SUMMARY
+ 
+ ###############################################################################
+# Scan Docker Image
+###############################################################################
+
+  scan-image:
+
+    name: Scan Docker Image
+
+    needs:
+      - build-image
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Scan Docker Image (Trivy)
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.build-image.outputs.image_uri }}
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '1'
+
+      - name: Scan Summary
+        run: |
+          {
+            echo "## Container Security"
+            echo ""
+            echo "✅ Docker image passed Trivy scan."
+          } >> $GITHUB_STEP_SUMMARY
+ 
+###############################################################################
+# Deploy Application
+###############################################################################
+
+  deploy-application:
+
+    name: Deploy Application
+
+    needs:
+      - scan-image
+      - load-infrastructure-context
+
+    runs-on: ubuntu-latest
+
+    environment: production
+
+    outputs:
+      task_definition_arn: ${{ steps.deploy.outputs.task-definition }}
+
+    steps:
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Download Current Task Definition
+        run: |
+          aws ecs describe-task-definition \
+            --task-definition "${{ needs.load-infrastructure-context.outputs.task_definition_family }}" \
+            --query taskDefinition \
+            > task-definition.json
+
+      - name: Render New Task Definition
+        id: render
+        uses: aws-actions/amazon-ecs-render-task-definition@v1
+        with:
+          task-definition: task-definition.json
+          container-name: ${{ needs.load-infrastructure-context.outputs.container_name }}
+          image: ${{ needs.build-image.outputs.image_uri }}
+
+      - name: Deploy ECS Service
+        id: deploy
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+        with:
+          task-definition: ${{ steps.render.outputs.task-definition }}
+
+          cluster: ${{ needs.load-infrastructure-context.outputs.ecs_cluster_name }}
+
+          service: ${{ needs.load-infrastructure-context.outputs.ecs_service_name }}
+
+          wait-for-service-stability: true
+
+      - name: Deployment Summary
+        run: |
+          {
+            echo "## Application Deployment"
+            echo ""
+            echo "Successfully deployed new ECS task definition."
+          } >> $GITHUB_STEP_SUMMARY
+          
+###############################################################################
+# Smoke Test
+###############################################################################
+
+  smoke-test:
+
+    name: Smoke Test
+
+    needs:
+      - deploy-application
+      - load-infrastructure-context
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Wait for ALB
+        run: sleep 30
+
+      - name: Health Check
+        run: |
+
+          curl \
+            --fail \
+            --retry 10 \
+            --retry-delay 10 \
+            http://${{ needs.load-infrastructure-context.outputs.alb_dns_name }}/health
+
+      - name: Smoke Test Summary
+        run: |
+          {
+            echo "## Smoke Test"
+            echo ""
+            echo "Health endpoint responded successfully."
+          } >> $GITHUB_STEP_SUMMARY
+          
+###############################################################################
+# Rollback
+###############################################################################
+
+  rollback:
+
+    name: Automatic Rollback
+
+    needs:
+      - deploy-application
+      - smoke-test
+      - load-infrastructure-context
+
+    if: |
+      always() &&  
+      needs.deploy-application.result == 'success' &&
+      needs.smoke-test.result == 'failure'
+
+    runs-on: ubuntu-latest
+
+    steps:
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Find Previous Task Definition
+
+        id: rollback
+
+        run: |
+
+          PREVIOUS=$(aws ecs list-task-definitions \
+            --family-prefix "${{ needs.load-infrastructure-context.outputs.task_definition_family }}" \
+            --sort DESC \
+            --max-items 2 \
+            --query 'taskDefinitionArns[1]' \
+            --output text)
+
+          echo "previous=$PREVIOUS" >> $GITHUB_OUTPUT
+
+      - name: Rollback Deployment
+
+        uses: aws-actions/amazon-ecs-deploy-task-definition@v2
+
+        with:
+
+          task-definition: ${{ steps.rollback.outputs.previous }}
+
+          cluster: ${{ needs.load-infrastructure-context.outputs.ecs_cluster_name }}
+
+          service: ${{ needs.load-infrastructure-context.outputs.ecs_service_name }}
+
+          wait-for-service-stability: true
+          
+      - name: Verify Rollback
+        run: |
+          curl \
+            --fail \
+            --retry 10 \
+            --retry-delay 10 \
+            http://${{ needs.load-infrastructure-context.outputs.alb_dns_name }}/health
+
+      - name: Rollback Summary
+        run: |
+          {
+            echo "## Rollback"
+            echo ""
+            echo "Previous task definition restored."
+          } >> $GITHUB_STEP_SUMMARY          
