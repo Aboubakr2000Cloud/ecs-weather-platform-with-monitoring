@@ -27,58 +27,58 @@ jobs:
 # Detect Changes
 ###############################################################################
 
-detect-changes:
-  name: Detect Changed Components
+  detect-changes:
+    name: Detect Changed Components
 
-  if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
-  runs-on: ubuntu-latest
+    runs-on: ubuntu-latest
 
-  outputs:
-    terraform_changed: ${{ steps.filter.outputs.terraform }}
-    image_changed: ${{ steps.filter.outputs.image }}
-    tests_changed: ${{ steps.filter.outputs.tests }}
-    workflow_changed: ${{ steps.filter.outputs.workflow }}
+    outputs:
+      terraform_changed: ${{ steps.filter.outputs.terraform }}
+      image_changed: ${{ steps.filter.outputs.image }}
+      tests_changed: ${{ steps.filter.outputs.tests }}
+      workflow_changed: ${{ steps.filter.outputs.workflow }}
 
-  steps:
-    - name: Checkout Repository
-      with:
-        ref: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - name: Checkout Repository
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
-    - name: Detect Changed Files
-      id: filter
-      uses: dorny/paths-filter@v3
-      with:
-        filters: |
-          terraform:
-            - 'terraform/**'
+      - name: Detect Changed Files
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            terraform:
+              - 'terraform/**'
 
-          image:
-            - 'app/**'
-            - 'Dockerfile'
-            - '.dockerignore'
-            - 'requirements.txt'
-            - 'migrations/**'
+            image:
+              - 'app/**'
+              - 'Dockerfile'
+              - '.dockerignore'
+              - 'requirements.txt'
+              - 'migrations/**'
 
-          tests:
-            - 'tests/**'
+            tests:
+              - 'tests/**'
 
-          workflow:
-            - '.github/workflows/**'
-            - 'scripts/**'
+            workflow:
+              - '.github/workflows/**'
+              - 'scripts/**'
 
-    - name: Deployment Summary
-      run: |
-        {
-          echo "## Detect Changes"
-          echo ""
-          echo "| Component | Changed |"
-          echo "|----------|---------|"
-          echo "| Terraform | ${{ steps.filter.outputs.terraform }} |"
-          echo "| Docker/Image | ${{ steps.filter.outputs.image }} |"
-          echo "| Tests | ${{ steps.filter.outputs.tests }} |"
-          echo "| Workflow | ${{ steps.filter.outputs.workflow }} |"
-        } >> $GITHUB_STEP_SUMMARY
+      - name: Deployment Summary
+        run: |
+          {
+            echo "## Detect Changes"
+            echo ""
+            echo "| Component | Changed |"
+            echo "|----------|---------|"
+            echo "| Terraform | ${{ steps.filter.outputs.terraform }} |"
+            echo "| Docker/Image | ${{ steps.filter.outputs.image }} |"
+            echo "| Tests | ${{ steps.filter.outputs.tests }} |"
+            echo "| Workflow | ${{ steps.filter.outputs.workflow }} |"
+          } >> $GITHUB_STEP_SUMMARY
 
 ###############################################################################
 # Deploy Infrastructure
