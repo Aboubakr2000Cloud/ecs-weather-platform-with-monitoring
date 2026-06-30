@@ -1,3 +1,14 @@
+terraform {
+  required_version = ">= 1.6"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
+    }
+  }
+}
+
 resource "aws_ecr_repository" "this" {
   name                 = var.repository_name
   image_tag_mutability = "MUTABLE"
@@ -8,7 +19,12 @@ resource "aws_ecr_repository" "this" {
     scan_on_push = true
   }
 
-  tags = { Name = "${var.name_prefix}-ecr" }
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-ecr"
+    }
+  )
 }
 
 resource "aws_ecr_lifecycle_policy" "this" {

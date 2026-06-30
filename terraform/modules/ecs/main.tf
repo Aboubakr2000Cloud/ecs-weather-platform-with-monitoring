@@ -1,15 +1,29 @@
+terraform {
+  required_version = ">= 1.6"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
+    }
+  }
+}
+
 # ECS Cluster
 resource "aws_ecs_cluster" "this" {
-  name = "${var.name_prefix}-cluster"
+  name = var.cluster_name
 
   setting {
     name  = "containerInsights"
     value = "enabled"
   }
 
-  tags = {
-    Name = "${var.name_prefix}-cluster"
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-cluster"
+    }
+  )
 }
 
 # CloudWatch Log Group
@@ -67,6 +81,13 @@ resource "aws_ecs_task_definition" "this" {
       startPeriod = 60
     }
   }])
+
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-ecs_task_definition"
+    }
+  )
 }
 
 # ECS Service
@@ -107,4 +128,11 @@ resource "aws_ecs_service" "this" {
       task_definition
     ]
   }
+
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-ecs_service"
+    }
+  )
 }

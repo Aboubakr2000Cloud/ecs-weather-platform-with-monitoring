@@ -1,12 +1,26 @@
+terraform {
+  required_version = ">= 1.6"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
+    }
+  }
+}
+
 # ── VPC ──────────────────────────────────────────────────────────
 resource "aws_vpc" "this" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
   enable_dns_support   = true
 
-  tags = {
-    Name = "${var.name_prefix}-vpc"
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-vpc"
+    }
+  )
 }
 
 # ── SUBNETS ──────────────────────────────────────────────────────────
@@ -18,10 +32,13 @@ resource "aws_subnet" "public" {
   availability_zone       = var.azs[count.index]
   map_public_ip_on_launch = true
 
-  tags = {
-    Name = "${var.name_prefix}-public-${count.index + 1}"
-    Tier = "public"
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-public_subnet-${count.index + 1}"
+      Tier = "public"
+    }
+  )
 }
 
 resource "aws_subnet" "private" {
@@ -31,19 +48,25 @@ resource "aws_subnet" "private" {
   cidr_block        = var.private_subnet_cidrs[count.index]
   availability_zone = var.azs[count.index]
 
-  tags = {
-    Name = "${var.name_prefix}-private-${count.index + 1}"
-    Tier = "private"
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-private_subnet-${count.index + 1}"
+      Tier = "public"
+    }
+  )
 }
 
 # ── IGW ──────────────────────────────────────────────────────────
 resource "aws_internet_gateway" "this" {
   vpc_id = aws_vpc.this.id
 
-  tags = {
-    Name = "${var.name_prefix}-igw"
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-igw"
+    }
+  )
 }
 
 # ── ELASTIC IP ──────────────────────────────────────────────────
@@ -51,9 +74,12 @@ resource "aws_eip" "nat" {
   domain     = "vpc"
   depends_on = [aws_internet_gateway.this]
 
-  tags = {
-    Name = "${var.name_prefix}-nat-eip"
-  }
+   tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-nat_eip"
+    }
+  )
 }
 
 # ── NAT ──────────────────────────────────────────────────────────
@@ -61,9 +87,12 @@ resource "aws_nat_gateway" "this" {
   allocation_id = aws_eip.nat.id
   subnet_id     = aws_subnet.public[0].id
   depends_on    = [aws_internet_gateway.this]
-  tags = {
-    Name = "${var.name_prefix}-nat"
-  }
+   tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-nat"
+    }
+  )
 }
 
 # ── PUBLIC ROUTE TABLE ──────────────────────────────────────────────────
@@ -75,9 +104,12 @@ resource "aws_route_table" "public" {
     gateway_id = aws_internet_gateway.this.id
   }
 
-  tags = {
-    Name = "${var.name_prefix}-public-rt"
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-public_rt"
+    }
+  )
 }
 
 # ── PUBLIC RTBs ASSOCIATION ──────────────────────────────────────────────────
@@ -96,9 +128,12 @@ resource "aws_route_table" "private" {
     nat_gateway_id = aws_nat_gateway.this.id
   }
 
-  tags = {
-    Name = "${var.name_prefix}-private-rt"
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-private_rt"
+    }
+  )
 }
 
 # ── PRIVATE RTB ASSOCIATION ──────────────────────────────────────────────────

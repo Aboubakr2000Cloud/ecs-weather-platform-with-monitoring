@@ -1,3 +1,14 @@
+terraform {
+  required_version = ">= 1.6"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
+    }
+  }
+}
+
 # ── ALB SG ──────────────────────────────────────────────────────────
 resource "aws_security_group" "alb" {
   name   = "${var.name_prefix}-alb-sg"
@@ -23,6 +34,13 @@ resource "aws_security_group" "alb" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-alb_sg"
+    }
+  )
 }
 
 # ── RDS SG ──────────────────────────────────────────────────────────
@@ -43,6 +61,13 @@ resource "aws_security_group" "rds" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-rds_sg"
+    }
+  )
 }
 
 # ── ECS TASK SG ──────────────────────────────────────────────────────────
@@ -65,4 +90,11 @@ resource "aws_security_group" "ecs_task" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
+
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-ecs_task_sg"
+    }
+  )
 }

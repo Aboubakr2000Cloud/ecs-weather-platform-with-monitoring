@@ -1,4 +1,5 @@
 from app.app import app as flask_app
+from unittest.mock import patch, MagicMock
 import os
 import json
 import pytest
@@ -18,11 +19,22 @@ def test_health_endpoint_returns_200_or_503(client):
     assert response.status_code in [200, 503]
 
 
-def test_weather_endpoint_404_for_invalid_city(client):
-    """Invalid city returns 404"""
-    # Mock the requests.get call to return a 404
+def test_weather_endpoint_404_for_invalid_city(mock_get, client):
+    """Weather endpoint returns 404 when Weather API returns 404"""
+
+    fake_response = MagicMock()
+    fake_response.status_code = 404
+    fake_response.json.return_value = {
+        "cod": "404",
+        "message": "city not found",
+    }
+
+    mock_get.return_value = fake_response
+
     response = client.get("/weather/ThisCityDefinitelyDoesNotExist12345")
+
     assert response.status_code == 404
+    mock_get.assert_called_once()
 
 
 def test_history_endpoint_returns_list(client, mock_db):

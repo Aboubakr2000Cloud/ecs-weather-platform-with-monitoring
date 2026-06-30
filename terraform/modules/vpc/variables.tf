@@ -3,3 +3,4 @@ variable "public_subnet_cidrs" { type = list(string) }
 variable "private_subnet_cidrs" { type = list(string) }
 variable "azs" { type = list(string) }
 variable "name_prefix" { type = string }
+variable "common_tags" { type = map(string) }

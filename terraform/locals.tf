@@ -1,10 +1,10 @@
 locals {
-  name_prefix = "ecs-weather-platform-${var.environment}"
+  name_prefix = "ecs-weather-platform--cicd${var.environment}"
   common_tags = {
-    Project     = "ecs-weather-platform"
+    Project     = "ecs-weather-platform-cicd"
     Environment = var.environment
     ManagedBy   = "terraform"
-    Week        = "18"
+    Week        = "19"
     Owner       = "Abou"
   }
 }

@@ -1,6 +1,7 @@
 variable "cluster_name" { type = string }
 variable "service_name" { type = string }
 variable "name_prefix" { type = string }
+variable "common_tags" { type = map(string) }
 variable "image_url" { type = string }
 variable "container_name" { type = string }
 variable "container_port" {

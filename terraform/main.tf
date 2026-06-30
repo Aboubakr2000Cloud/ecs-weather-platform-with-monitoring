@@ -7,6 +7,7 @@ module "vpc" {
   private_subnet_cidrs = var.private_subnet_cidrs
   azs                  = var.azs
   name_prefix          = local.name_prefix
+  common_tags          = local.common_tags
 }
 
 # ── Security Groups ───────────────────────────────────────────────
@@ -15,6 +16,7 @@ module "security_groups" {
 
   vpc_id      = module.vpc.vpc_id
   name_prefix = local.name_prefix
+  common_tags = local.common_tags
 }
 
 # ── ALB ───────────────────────────────────────────────────────────
@@ -25,6 +27,7 @@ module "alb" {
   public_subnet_ids = module.vpc.public_subnet_ids
   alb_sg_id         = module.security_groups.alb_sg_id
   name_prefix       = local.name_prefix
+  common_tags       = local.common_tags
 }
 
 # ── RDS ───────────────────────────────────────────────────────────
@@ -39,13 +42,15 @@ module "rds" {
   db_password        = var.db_password
   db_instance_class  = var.db_instance_class
   name_prefix        = local.name_prefix
+  common_tags        = local.common_tags
 }
 
 # ── ECR ───────────────────────────────────────────────────────────
 module "ecr" {
   source          = "./modules/ecr"
-  repository_name = "weather-app"
+  repository_name = var.repository_name
   name_prefix     = local.name_prefix
+  common_tags     = local.common_tags
 }
 
 # ── ECS ───────────────────────────────────────────────────────────
@@ -56,6 +61,7 @@ module "ecs" {
   service_name        = var.service_name
   container_name      = var.container_name
   name_prefix         = local.name_prefix
+  common_tags         = local.common_tags
   image_url           = "${module.ecr.repository_url}:bootstrap"
   private_subnet_ids  = module.vpc.private_subnet_ids
   ecs_sg_id           = module.security_groups.ecs_sg_id

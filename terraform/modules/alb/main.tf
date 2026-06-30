@@ -1,3 +1,14 @@
+terraform {
+  required_version = ">= 1.6"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
+    }
+  }
+}
+
 resource "aws_lb" "this" {
   name               = "${var.name_prefix}-alb"
   internal           = false
@@ -5,9 +16,12 @@ resource "aws_lb" "this" {
   security_groups    = [var.alb_sg_id]
   subnets            = var.public_subnet_ids
 
-  tags = {
-    Name = "${var.name_prefix}-alb"
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-alb"
+    }
+  )
 }
 
 resource "aws_lb_target_group" "this" {
@@ -27,9 +41,12 @@ resource "aws_lb_target_group" "this" {
     protocol            = "HTTP"
   }
 
-  tags = {
-    Name = "${var.name_prefix}-tg"
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-tg"
+    }
+  )
 }
 
 resource "aws_lb_listener" "http" {
@@ -41,4 +58,11 @@ resource "aws_lb_listener" "http" {
     type             = "forward"
     target_group_arn = aws_lb_target_group.this.arn
   }
+
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-lb_listener"
+    }
+  )
 }

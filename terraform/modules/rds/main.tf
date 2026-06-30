@@ -1,7 +1,24 @@
+terraform {
+  required_version = ">= 1.6"
+
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 6.0"
+    }
+  }
+}
+
 # ── DB SUBNET GROUP ─────────────────────────────────────────────────────
 resource "aws_db_subnet_group" "this" {
   name       = "${var.name_prefix}-db-subnet-group"
   subnet_ids = var.private_subnet_ids
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-db_subnet_group"
+    }
+  )
 }
 
 # ── DB INSTANCE ─────────────────────────────────────────────────────────
@@ -29,7 +46,10 @@ resource "aws_db_instance" "this" {
   deletion_protection = false
   storage_encrypted   = true
 
-  tags = {
-    Name = "${var.name_prefix}-db"
-  }
+  tags = merge(
+    var.common_tags,
+    {
+      Name = "${var.name_prefix}-db"
+    }
+  )
 }

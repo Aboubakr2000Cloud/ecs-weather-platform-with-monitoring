@@ -1,9 +1,10 @@
 name: Production Deployment
 
 on:
-  push:
-    branches:
-      - main
+  workflow_run:
+    workflows: ["CI"]
+    types:
+      - completed
 
   workflow_dispatch:
 
@@ -26,96 +27,59 @@ jobs:
 # Detect Changes
 ###############################################################################
 
-  detect-changes:
-    name: Detect Changed Components
+detect-changes:
+  name: Detect Changed Components
 
-    runs-on: ubuntu-latest
+  if: ${{ github.event.workflow_run.conclusion == 'success' }}
 
-    outputs:
-      terraform_changed: ${{ steps.filter.outputs.terraform }}
-      app_changed: ${{ steps.filter.outputs.app }}
+  runs-on: ubuntu-latest
 
-    steps:
+  outputs:
+    terraform_changed: ${{ steps.filter.outputs.terraform }}
+    image_changed: ${{ steps.filter.outputs.image }}
+    tests_changed: ${{ steps.filter.outputs.tests }}
+    workflow_changed: ${{ steps.filter.outputs.workflow }}
 
-      - name: Checkout Repository
-        uses: actions/checkout@v4
+  steps:
+    - name: Checkout Repository
+      with:
+        ref: ${{ github.event.workflow_run.head_sha }}
 
-      - name: Detect Changed Files
-        id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            terraform:
-              - 'terraform/**'
+    - name: Detect Changed Files
+      id: filter
+      uses: dorny/paths-filter@v3
+      with:
+        filters: |
+          terraform:
+            - 'terraform/**'
 
-            app:
-              - 'app/**'
-              - 'tests/**'
-              - 'Dockerfile'
-              - 'requirements.txt'
-              - 'migrations/**'
+          image:
+            - 'app/**'
+            - 'Dockerfile'
+            - '.dockerignore'
+            - 'requirements.txt'
+            - 'migrations/**'
 
-      - name: Deployment Summary
-        run: |
-          {
-            echo "## Detect Changes"
-            echo ""
-            echo "| Component | Changed |"
-            echo "|----------|---------|"
-            echo "| Terraform | ${{ steps.filter.outputs.terraform }} |"
-            echo "| Application | ${{ steps.filter.outputs.app }} |"
-          } >> $GITHUB_STEP_SUMMARY
+          tests:
+            - 'tests/**'
 
-###############################################################################
-# Load Infrastructure Context
-###############################################################################
+          workflow:
+            - '.github/workflows/**'
+            - 'scripts/**'
 
-  load-infrastructure-context:
+    - name: Deployment Summary
+      run: |
+        {
+          echo "## Detect Changes"
+          echo ""
+          echo "| Component | Changed |"
+          echo "|----------|---------|"
+          echo "| Terraform | ${{ steps.filter.outputs.terraform }} |"
+          echo "| Docker/Image | ${{ steps.filter.outputs.image }} |"
+          echo "| Tests | ${{ steps.filter.outputs.tests }} |"
+          echo "| Workflow | ${{ steps.filter.outputs.workflow }} |"
+        } >> $GITHUB_STEP_SUMMARY
 
-    name: Load Infrastructure Context
-
-    needs: detect-changes
-
-    runs-on: ubuntu-latest
-
-    outputs:
-      ecr_repo_url: ${{ steps.outputs.outputs.ecr_repo_url }}
-      ecs_cluster_name: ${{ steps.outputs.outputs.ecs_cluster_name }}
-      ecs_service_name: ${{ steps.outputs.outputs.ecs_service_name }}
-      task_definition_family: ${{ steps.outputs.outputs.task_definition_family }}
-      alb_dns_name: ${{ steps.outputs.outputs.alb_dns_name }}
-      container_name: ${{ steps.outputs.outputs.container_name }}
-
-    steps:
-
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-
-      - name: Configure AWS Credentials
-        uses: aws-actions/configure-aws-credentials@v4
-        with:
-          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
-          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-          aws-region: ${{ env.AWS_REGION }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-
-      - name: Terraform Init
-        working-directory: ${{ env.TERRAFORM_DIR }}
-        run: terraform init -backend-config=backends/dev.hcl
-
-      - name: Export Terraform Outputs
-        id: outputs
-        working-directory: ${{ env.TERRAFORM_DIR }}
-        run: |
-          echo "ecr_repo_url=$(terraform output -raw ecr_repo_url)" >> $GITHUB_OUTPUT
-          echo "ecs_cluster_name=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_OUTPUT
-          echo "ecs_service_name=$(terraform output -raw ecs_service_name)" >> $GITHUB_OUTPUT
-          echo "task_definition_family=$(terraform output -raw task_definition_family)" >> $GITHUB_OUTPUT
-          echo "alb_dns_name=$(terraform output -raw alb_dns_name)" >> $GITHUB_OUTPUT
-          echo "container_name=$(terraform output -raw container_name)" >> $GITHUB_OUTPUT
-          
 ###############################################################################
 # Deploy Infrastructure
 ###############################################################################
@@ -126,7 +90,9 @@ jobs:
 
     needs:
       - detect-changes
-      - load-infrastructure-context
+
+    if: |
+      needs.detect-changes.outputs.terraform_changed == 'true'
 
     runs-on: ubuntu-latest
 
@@ -135,7 +101,8 @@ jobs:
     steps:
 
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -176,7 +143,7 @@ jobs:
             echo ""
             echo "✅ Terraform Apply completed successfully."
           } >> $GITHUB_STEP_SUMMARY
-          
+
 ###############################################################################
 # Build Docker Image
 ###############################################################################
@@ -187,13 +154,9 @@ jobs:
 
     needs:
       - detect-changes
-      - load-infrastructure-context
-      - deploy-infrastructure
 
     if: |
-      always() &&
-      (needs.deploy-infrastructure.result == 'success' ||
-        needs.deploy-infrastructure.result == 'skipped')
+      needs.detect-changes.outputs.image_changed == 'true'
 
     runs-on: ubuntu-latest
 
@@ -203,7 +166,8 @@ jobs:
     steps:
 
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -250,6 +214,9 @@ jobs:
     needs:
       - build-image
 
+    if: |
+      if: needs.build-image.result == 'success'
+
     runs-on: ubuntu-latest
 
     steps:
@@ -280,6 +247,63 @@ jobs:
             echo ""
             echo "✅ Docker image passed Trivy scan."
           } >> $GITHUB_STEP_SUMMARY
+
+###############################################################################
+# Load Infrastructure Context
+###############################################################################
+
+  load-infrastructure-context:
+
+    name: Load Infrastructure Context
+
+    needs: 
+      - detect-changes
+      - deploy-infrastructure
+
+    if: |
+      needs.detect-changes.outputs.image_changed == 'true'
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      ecr_repo_url: ${{ steps.outputs.outputs.ecr_repo_url }}
+      ecs_cluster_name: ${{ steps.outputs.outputs.ecs_cluster_name }}
+      ecs_service_name: ${{ steps.outputs.outputs.ecs_service_name }}
+      task_definition_family: ${{ steps.outputs.outputs.task_definition_family }}
+      alb_dns_name: ${{ steps.outputs.outputs.alb_dns_name }}
+      container_name: ${{ steps.outputs.outputs.container_name }}
+
+    steps:
+
+      - name: Checkout Repository
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform init -backend-config=backends/dev.hcl
+
+      - name: Export Terraform Outputs
+        id: outputs
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: |
+          echo "ecr_repo_url=$(terraform output -raw ecr_repo_url)" >> $GITHUB_OUTPUT
+          echo "ecs_cluster_name=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_OUTPUT
+          echo "ecs_service_name=$(terraform output -raw ecs_service_name)" >> $GITHUB_OUTPUT
+          echo "task_definition_family=$(terraform output -raw task_definition_family)" >> $GITHUB_OUTPUT
+          echo "alb_dns_name=$(terraform output -raw alb_dns_name)" >> $GITHUB_OUTPUT
+          echo "container_name=$(terraform output -raw container_name)" >> $GITHUB_OUTPUT
+                   
  
 ###############################################################################
 # Deploy Application
@@ -294,6 +318,10 @@ jobs:
       - scan-image
       - load-infrastructure-context
 
+    if: |
+      needs.build-image.result == 'success' &&
+      needs.scan-image.result == 'success'
+
     runs-on: ubuntu-latest
 
     environment: production
@@ -304,7 +332,8 @@ jobs:
     steps:
 
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
@@ -358,14 +387,17 @@ jobs:
 
     needs:
       - deploy-application
-      - load-infrastructure-context
+
+    if: |
+      needs.deploy-application.result == 'success'
 
     runs-on: ubuntu-latest
 
     steps:
 
       - name: Checkout Repository
-        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
 
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
