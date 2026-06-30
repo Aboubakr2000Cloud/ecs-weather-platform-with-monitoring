@@ -38,6 +38,7 @@ jobs:
       workflow_changed: ${{ steps.filter.outputs.workflow }}
     steps:
       - name: Checkout Repository
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
@@ -90,6 +91,7 @@ jobs:
     environment: production
     steps:
       - name: Checkout Repository
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
@@ -148,6 +150,7 @@ jobs:
       image_uri: ${{ steps.build.outputs.image_uri }}
     steps:
       - name: Checkout Repository
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
@@ -245,6 +248,7 @@ jobs:
       container_name: ${{ steps.outputs.outputs.container_name }}
     steps:
       - name: Checkout Repository
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
@@ -292,6 +296,7 @@ jobs:
       task_definition_arn: ${{ steps.deploy.outputs.task-definition }}
     steps:
       - name: Checkout Repository
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
@@ -350,6 +355,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
+        uses: actions/checkout@v4
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
 
