@@ -290,6 +290,7 @@ jobs:
     name: Deploy Application
 
     needs:
+      - build-image
       - scan-image
       - load-infrastructure-context
 
