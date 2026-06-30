@@ -1,0 +1,130 @@
+name: Rollback
+
+on:
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: "Type ROLLBACK to confirm"
+        required: true
+        type: string
+
+env:
+  AWS_REGION: eu-west-1
+  TERRAFORM_DIR: terraform
+
+jobs:
+
+###############################################################################
+# Rollback
+###############################################################################
+
+  rollback:
+
+    name: Rollback Previous Deployment
+
+    runs-on: ubuntu-latest
+
+    environment: production
+
+    steps:
+
+      - name: Validate Confirmation
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "ROLLBACK" ]; then
+            echo "❌ Confirmation failed."
+            echo "Type exactly: ROLLBACK"
+            exit 1
+          fi
+
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform init -backend-config=backends/dev.hcl
+
+      - name: Read Terraform Outputs
+        id: tf
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: |
+          echo "cluster=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_OUTPUT
+          echo "service=$(terraform output -raw ecs_service_name)" >> $GITHUB_OUTPUT
+          echo "alb=$(terraform output -raw alb_dns_name)" >> $GITHUB_OUTPUT
+
+      - name: Rollback ECS Service
+        id: rollback
+        env:
+          CLUSTER: ${{ steps.tf.outputs.cluster }}
+          SERVICE: ${{ steps.tf.outputs.service }}
+        run: |
+
+          CURRENT=$(aws ecs describe-services \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE" \
+            --query "services[0].taskDefinition" \
+            --output text)
+
+          FAMILY=$(basename "$CURRENT")
+
+          FAMILY_NAME=$(echo "$FAMILY" | sed 's/:[0-9]*$//')
+
+          CURRENT_REV=$(echo "$CURRENT" | grep -o '[0-9]*$')
+
+          PREV_REV=$((CURRENT_REV-1))
+
+          if [ "$PREV_REV" -lt 1 ]; then
+            echo "❌ No previous task definition exists."
+            exit 1
+          fi
+
+          aws ecs describe-task-definition \
+            --task-definition "${FAMILY_NAME}:${PREV_REV}" >/dev/null
+
+          echo "Rolling back:"
+          echo "Current : ${CURRENT}"
+          echo "Previous: ${FAMILY_NAME}:${PREV_REV}"
+
+          aws ecs update-service \
+            --cluster "$CLUSTER" \
+            --service "$SERVICE" \
+            --task-definition "${FAMILY_NAME}:${PREV_REV}"
+
+          aws ecs wait services-stable \
+            --cluster "$CLUSTER" \
+            --services "$SERVICE"
+
+          echo "previous=${FAMILY_NAME}:${PREV_REV}" >> $GITHUB_OUTPUT
+          echo "current=${CURRENT}" >> $GITHUB_OUTPUT
+
+      - name: Smoke Test
+        env:
+          ALB: ${{ steps.tf.outputs.alb }}
+        run: |
+          curl --fail --retry 10 --retry-delay 10 \
+            http://${ALB}/health
+
+      - name: Rollback Summary
+        run: |
+          {
+            echo "## Rollback Completed"
+            echo ""
+            echo "| Item | Value |"
+            echo "|------|-------|"
+            echo "| Previous Task Definition | \`${{ steps.rollback.outputs.previous }}\` |"
+            echo "| Rolled Back From | \`${{ steps.rollback.outputs.current }}\` |"
+            echo ""
+            echo "✅ ECS service is stable."
+            echo ""
+            echo "✅ Smoke tests passed."
+          } >> $GITHUB_STEP_SUMMARY
+
