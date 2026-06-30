@@ -19,6 +19,7 @@ def test_health_endpoint_returns_200_or_503(client):
     assert response.status_code in [200, 503]
 
 
+@patch("app.app.requests.get")
 def test_weather_endpoint_404_for_invalid_city(mock_get, client):
     """Weather endpoint returns 404 when Weather API returns 404"""
 
