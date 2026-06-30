@@ -11,7 +11,6 @@ ENV PATH="/opt/venv/bin:$PATH"
 
 # Install build dependencies
 COPY requirements.txt .
-RUN python -m pip install --upgrade pip
 RUN pip install \
     --no-cache-dir \
     --disable-pip-version-check \
@@ -34,7 +33,7 @@ WORKDIR /app
 COPY --from=builder /opt/venv /opt/venv
 
 # Copy application
-COPY app/ .
+COPY app/ /app/
 
 # Non-root user
 RUN useradd \
