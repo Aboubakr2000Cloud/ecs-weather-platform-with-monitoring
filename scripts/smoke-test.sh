@@ -1,4 +1,3 @@
-```bash
 #!/usr/bin/env bash
 set -euo pipefail
 
@@ -123,5 +122,4 @@ echo ""
 echo "=================================================="
 echo "✅ All smoke tests passed!"
 echo "=================================================="
-```
 
