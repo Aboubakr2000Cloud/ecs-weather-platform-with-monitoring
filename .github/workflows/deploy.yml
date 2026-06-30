@@ -29,17 +29,13 @@ jobs:
 
   detect-changes:
     name: Detect Changed Components
-
     if: ${{ github.event.workflow_run.conclusion == 'success' }}
-
     runs-on: ubuntu-latest
-
     outputs:
       terraform_changed: ${{ steps.filter.outputs.terraform }}
       image_changed: ${{ steps.filter.outputs.image }}
       tests_changed: ${{ steps.filter.outputs.tests }}
       workflow_changed: ${{ steps.filter.outputs.workflow }}
-
     steps:
       - name: Checkout Repository
         with:
@@ -85,21 +81,14 @@ jobs:
 ###############################################################################
 
   deploy-infrastructure:
-
     name: Deploy Infrastructure
-
     needs:
       - detect-changes
-
     if: |
       needs.detect-changes.outputs.terraform_changed == 'true'
-
     runs-on: ubuntu-latest
-
     environment: production
-
     steps:
-
       - name: Checkout Repository
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
@@ -149,22 +138,15 @@ jobs:
 ###############################################################################
 
   build-image:
-
     name: Build & Push Docker Image
-
     needs:
       - detect-changes
-
     if: |
       needs.detect-changes.outputs.image_changed == 'true'
-
     runs-on: ubuntu-latest
-
     outputs:
       image_uri: ${{ steps.build.outputs.image_uri }}
-
     steps:
-
       - name: Checkout Repository
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
@@ -208,19 +190,13 @@ jobs:
 ###############################################################################
 
   scan-image:
-
     name: Scan Docker Image
-
     needs:
       - build-image
-
     if: |
       if: needs.build-image.result == 'success'
-
     runs-on: ubuntu-latest
-
     steps:
-
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -253,18 +229,13 @@ jobs:
 ###############################################################################
 
   load-infrastructure-context:
-
     name: Load Infrastructure Context
-
     needs: 
       - detect-changes
       - deploy-infrastructure
-
     if: |
       needs.detect-changes.outputs.image_changed == 'true'
-
     runs-on: ubuntu-latest
-
     outputs:
       ecr_repo_url: ${{ steps.outputs.outputs.ecr_repo_url }}
       ecs_cluster_name: ${{ steps.outputs.outputs.ecs_cluster_name }}
@@ -272,9 +243,7 @@ jobs:
       task_definition_family: ${{ steps.outputs.outputs.task_definition_family }}
       alb_dns_name: ${{ steps.outputs.outputs.alb_dns_name }}
       container_name: ${{ steps.outputs.outputs.container_name }}
-
     steps:
-
       - name: Checkout Repository
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
@@ -310,27 +279,19 @@ jobs:
 ###############################################################################
 
   deploy-application:
-
     name: Deploy Application
-
     needs:
       - build-image
       - scan-image
       - load-infrastructure-context
-
     if: |
       needs.build-image.result == 'success' &&
       needs.scan-image.result == 'success'
-
     runs-on: ubuntu-latest
-
     environment: production
-
     outputs:
       task_definition_arn: ${{ steps.deploy.outputs.task-definition }}
-
     steps:
-
       - name: Checkout Repository
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
@@ -382,19 +343,13 @@ jobs:
 ###############################################################################
 
   smoke-test:
-
     name: Smoke Test
-
     needs:
       - deploy-application
-
     if: |
       needs.deploy-application.result == 'success'
-
     runs-on: ubuntu-latest
-
     steps:
-
       - name: Checkout Repository
         with:
           ref: ${{ github.event.workflow_run.head_sha }}
@@ -426,23 +381,17 @@ jobs:
 ###############################################################################
 
   rollback:
-
     name: Automatic Rollback
-
     needs:
       - deploy-application
       - smoke-test
       - load-infrastructure-context
-
     if: |
       always() &&  
       needs.deploy-application.result == 'success' &&
       needs.smoke-test.result == 'failure'
-
     runs-on: ubuntu-latest
-
     steps:
-
       - name: Configure AWS Credentials
         uses: aws-actions/configure-aws-credentials@v4
         with:
