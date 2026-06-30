@@ -206,7 +206,7 @@ jobs:
 
       - name: Login to Amazon ECR
         uses: aws-actions/amazon-ecr-login@v2
-      
+
       - name: Scan Docker Image (Trivy)
         uses: aquasecurity/trivy-action@master
         with:
@@ -230,7 +230,7 @@ jobs:
 
   load-infrastructure-context:
     name: Load Infrastructure Context
-    needs: 
+    needs:
       - detect-changes
       - deploy-infrastructure
     if: |
@@ -272,8 +272,7 @@ jobs:
           echo "task_definition_family=$(terraform output -raw task_definition_family)" >> $GITHUB_OUTPUT
           echo "alb_dns_name=$(terraform output -raw alb_dns_name)" >> $GITHUB_OUTPUT
           echo "container_name=$(terraform output -raw container_name)" >> $GITHUB_OUTPUT
-                   
- 
+
 ###############################################################################
 # Deploy Application
 ###############################################################################
@@ -337,7 +336,7 @@ jobs:
             echo ""
             echo "Successfully deployed new ECS task definition."
           } >> $GITHUB_STEP_SUMMARY
-          
+
 ###############################################################################
 # Smoke Test
 ###############################################################################
@@ -375,7 +374,7 @@ jobs:
             echo ""
             echo "Health endpoint responded successfully."
           } >> $GITHUB_STEP_SUMMARY
-          
+
 ###############################################################################
 # Rollback
 ###############################################################################
@@ -387,7 +386,7 @@ jobs:
       - smoke-test
       - load-infrastructure-context
     if: |
-      always() &&  
+      always() &&
       needs.deploy-application.result == 'success' &&
       needs.smoke-test.result == 'failure'
     runs-on: ubuntu-latest
@@ -427,7 +426,7 @@ jobs:
           service: ${{ needs.load-infrastructure-context.outputs.ecs_service_name }}
 
           wait-for-service-stability: true
-          
+
       - name: Verify Rollback
         run: |
           bash scripts/smoke-test.sh "http://${{ needs.load-infrastructure-context.outputs.alb_dns_name }}"
@@ -438,4 +437,4 @@ jobs:
             echo "## Rollback"
             echo ""
             echo "Previous task definition restored."
-          } >> $GITHUB_STEP_SUMMARY          
+          } >> $GITHUB_STEP_SUMMARY
