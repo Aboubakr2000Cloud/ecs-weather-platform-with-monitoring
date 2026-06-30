@@ -197,7 +197,7 @@ jobs:
     needs:
       - build-image
     if: |
-      if: needs.build-image.result == 'success'
+      needs.build-image.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS Credentials
