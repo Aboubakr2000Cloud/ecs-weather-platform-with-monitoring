@@ -434,8 +434,6 @@ jobs:
     name: Scan Docker Image
     needs:
       - build-image
-    if: |
-      needs.build-image.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Configure AWS Credentials
@@ -475,9 +473,6 @@ jobs:
       - build-image
       - scan-image
       - context-ready
-    if: |
-      needs.build-image.result == 'success' &&
-      needs.scan-image.result == 'success'
     runs-on: ubuntu-latest
     environment: production
     outputs:
@@ -539,8 +534,6 @@ jobs:
     needs:
       - deploy-application
       - context-ready
-    if: |
-      needs.deploy-application.result == 'success'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout Repository
@@ -581,8 +574,6 @@ jobs:
       - smoke-test
       - context-ready
     if: |
-      always() &&
-      needs.deploy-application.result == 'success' &&
       needs.smoke-test.result == 'failure'
     runs-on: ubuntu-latest
     steps:
