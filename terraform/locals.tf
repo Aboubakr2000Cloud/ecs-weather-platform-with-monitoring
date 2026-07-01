@@ -1,5 +1,5 @@
 locals {
-  name_prefix = "ecs-weather-platform--cicd${var.environment}"
+  name_prefix = "weather-${var.environment}"
   common_tags = {
     Project     = "ecs-weather-platform-cicd"
     Environment = var.environment
