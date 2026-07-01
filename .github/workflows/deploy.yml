@@ -99,82 +99,11 @@ defaults:
 jobs:
 
 ###############################################################################
-# Detect Changes
-###############################################################################
-
-  detect-changes:
-    name: Detect Changed Components
-    if: |
-      github.event_name == 'workflow_dispatch' ||
-      github.event.workflow_run.conclusion == 'success'
-    runs-on: ubuntu-latest
-    outputs:
-      terraform_changed: ${{ steps.filter.outputs.terraform }}
-      image_changed: ${{ steps.filter.outputs.image }}
-      tests_changed: ${{ steps.filter.outputs.tests }}
-      workflow_changed: ${{ steps.filter.outputs.workflow }}
-    steps:
-      - name: Checkout Repository
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.workflow_run.head_sha }}
-          fetch-depth: 0
-
-      - name: Debug workflow_run payload
-        run: |
-          echo "Event: ${{ github.event_name }}"
-          echo "Head SHA: ${{ github.event.workflow_run.head_sha }}"
-          echo "Head Branch: ${{ github.event.workflow_run.head_branch }}"
-          echo "Head Repository: ${{ github.event.workflow_run.head_repository.full_name }}"
-
-      - name: Detect Changed Files
-        id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          base: ${{ github.event.workflow_run.head_branch }}
-          ref: ${{ github.event.workflow_run.head_sha }}
-          
-          filters: |
-            terraform:
-              - 'terraform/**'
-
-            image:
-              - 'app/**'
-              - 'Dockerfile'
-              - '.dockerignore'
-              - 'requirements.txt'
-              - 'migrations/**'
-
-            tests:
-              - 'tests/**'
-
-            workflow:
-              - '.github/workflows/**'
-              - 'scripts/**'
-
-      - name: Deployment Summary
-        run: |
-          {
-            echo "## Detect Changes"
-            echo ""
-            echo "| Component | Changed |"
-            echo "|----------|---------|"
-            echo "| Terraform | ${{ steps.filter.outputs.terraform }} |"
-            echo "| Docker/Image | ${{ steps.filter.outputs.image }} |"
-            echo "| Tests | ${{ steps.filter.outputs.tests }} |"
-            echo "| Workflow | ${{ steps.filter.outputs.workflow }} |"
-          } >> $GITHUB_STEP_SUMMARY
-
-###############################################################################
 # Deploy Infrastructure
 ###############################################################################
 
   deploy-infrastructure:
     name: Deploy Infrastructure
-    needs:
-      - detect-changes
-    if: |
-      needs.detect-changes.outputs.terraform_changed == 'true'
     runs-on: ubuntu-latest
     environment: production
     steps:
@@ -205,6 +134,26 @@ jobs:
         working-directory: ${{ env.TERRAFORM_DIR }}
         run: terraform validate
 
+      - name: Terraform Plan
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        env:
+          TF_VAR_db_password: ${{ secrets.DB_PASSWORD }}
+          TF_VAR_weather_api_key: ${{ secrets.WEATHER_API_KEY }}
+        run: |
+          terraform plan \
+            -var-file=envs/dev.tfvars \
+            -out=tfplan
+            
+          terraform show -no-color tfplan > plan.txt  
+
+      - name: Upload Terraform Plan
+        uses: actions/upload-artifact@v4
+        with:
+          name: terraform-plan
+          path: |
+            terraform/tfplan
+            terraform/plan.txt
+
       - name: Terraform Apply
         working-directory: ${{ env.TERRAFORM_DIR }}
         env:
@@ -213,14 +162,19 @@ jobs:
         run: |
           terraform apply \
             -auto-approve \
-            -var-file=envs/dev.tfvars
+            tfplan
 
-      - name: Deployment Summary
+      - name: Infrastructure Summary
         run: |
           {
-            echo "## Infrastructure"
+            echo "## Infrastructure Deployment"
             echo ""
-            echo "✅ Terraform Apply completed successfully."
+            echo "### Terraform"
+            echo ""
+            echo "- ✅ Validation passed"
+            echo "- ✅ Execution plan generated"
+            echo "- ✅ Plan uploaded as workflow artifact"
+            echo "- ✅ Infrastructure successfully applied"
           } >> $GITHUB_STEP_SUMMARY
 
 ###############################################################################
@@ -230,15 +184,10 @@ jobs:
   load-infrastructure-context:
     name: Load Infrastructure Context
     needs:
-      - detect-changes
       - deploy-infrastructure
     if: |
       always() &&
-      needs.detect-changes.outputs.image_changed == 'true' &&
-      (
-        needs.deploy-infrastructure.result == 'success' ||
-        needs.deploy-infrastructure.result == 'skipped'
-      )
+      needs.deploy-infrastructure.result == 'success'
     runs-on: ubuntu-latest
     outputs:
       ecr_repo_url: ${{ steps.outputs.outputs.ecr_repo_url }}
@@ -285,15 +234,7 @@ jobs:
   build-image:
     name: Build & Push Docker Image
     needs:
-      - detect-changes
       - load-infrastructure-context
-    if: |
-      always() &&
-      needs.detect-changes.outputs.image_changed == 'true' &&
-      (
-        needs.deploy-infrastructure.result == 'success' ||
-        needs.deploy-infrastructure.result == 'skipped'
-      )
     runs-on: ubuntu-latest
     outputs:
       image_uri: ${{ steps.build.outputs.image_uri }}
