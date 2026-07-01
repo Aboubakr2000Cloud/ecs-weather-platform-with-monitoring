@@ -1,5 +1,26 @@
 name: CI
 
+###############################################################################
+# Workflow: Continuous Integration (CI)
+#
+# Purpose:
+#   Validate every code change before deployment.
+#
+# Trigger:
+#   - push
+#   - pull_request
+#
+# Main Components:
+#   - Code Quality (Black, Flake8, Hadolint, TFLint)
+#   - Unit Tests
+#   - Integration Tests
+#   - Docker Build Verification
+#
+# Outcome:
+#   Ensures the application, infrastructure, and Docker image are valid before
+#   the deployment workflow is allowed to execute.
+###############################################################################
+
 on:
   push:
     branches: [main, develop, 'feature/**']

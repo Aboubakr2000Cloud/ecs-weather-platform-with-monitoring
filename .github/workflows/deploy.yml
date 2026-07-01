@@ -1,5 +1,80 @@
 name: Production Deployment
 
+###############################################################################
+# Workflow: Production Deployment (CD)
+#
+# Purpose:
+#   Deploy infrastructure and application to AWS ECS.
+#
+# Trigger:
+#   - workflow_run (after successful CI)
+#   - workflow_dispatch
+#
+# Main Components:
+#   - Change Detection
+#   - Terraform Infrastructure Deployment
+#   - Infrastructure Context Loading
+#   - Docker Image Build & Push
+#   - Container Security Scan (Trivy)
+#   - ECS Application Deployment
+#   - Smoke Testing
+#   - Automatic Rollback
+#
+# Outcome:
+#   Deploys infrastructure changes when required and releases a validated
+#   application to AWS ECS with post-deployment verification.
+###############################################################################
+
+###############################################################################
+#
+#                         PRODUCTION DEPLOYMENT PIPELINE
+#
+#
+#                           Detect Changes
+#                                 │
+#                ┌────────────────┴────────────────┐
+#                │                                 │
+#                ▼                                 ▼
+#      Deploy Infrastructure          Load Existing Context
+#                │                                 │
+#                ▼                                 │
+#        Load New Context                          │
+#                └───────────────┬─────────────────┘
+#                                ▼
+#                        Infrastructure
+#                        Context Ready
+#                                │
+#                                ▼
+#                    Build & Push Docker Image
+#                                │
+#                                ▼
+#                         Scan Docker Image
+#                                │
+#                                ▼
+#                       Deploy Application
+#                                │
+#                                ▼
+#                           Smoke Tests
+#                                │
+#                                ▼
+#                     Automatic Rollback
+#
+#
+# Pipeline Logic
+# --------------
+#
+# • Application-only changes:
+#     Detect → Load Existing Context → Build → Scan → Deploy
+#
+# • Infrastructure changes:
+#     Detect → Terraform Apply → Load New Context → Build → Scan → Deploy
+#
+# • Context Ready exposes a single set of Terraform outputs so downstream
+#   jobs never need to know whether infrastructure already existed or was
+#   just created.
+#
+###############################################################################
+
 on:
   workflow_run:
     workflows: ["CI"]
@@ -81,12 +156,13 @@ jobs:
 # Load Infrastructure Context
 ###############################################################################
 
-  load-infrastructure-context:
-    name: Load Infrastructure Context
+  load-existing-infrastructure-context:
+    name: Load Existing Infrastructure Context
     needs:
       - detect-changes
     if: |
-      needs.detect-changes.outputs.image_changed == 'true'
+        needs.detect-changes.outputs.image_changed == 'true' &&
+        needs.detect-changes.outputs.terraform_changed == 'false'
     runs-on: ubuntu-latest
     outputs:
       ecr_repo_url: ${{ steps.outputs.outputs.ecr_repo_url }}
@@ -125,6 +201,112 @@ jobs:
           echo "task_definition_family=$(terraform output -raw task_definition_family)" >> $GITHUB_OUTPUT
           echo "alb_dns_name=$(terraform output -raw alb_dns_name)" >> $GITHUB_OUTPUT
           echo "container_name=$(terraform output -raw container_name)" >> $GITHUB_OUTPUT
+
+###############################################################################
+# Load New Infrastructure Context
+###############################################################################
+
+  load-new-infrastructure-context:
+    name: Load New Infrastructure Context
+    needs:
+      - deploy-infrastructure
+      - detect-changes
+    if: |
+      always() &&
+      needs.detect-changes.outputs.image_changed == 'true' &&
+      needs.detect-changes.outputs.terraform_changed == 'true' &&
+      needs.deploy-infrastructure.result == 'success'
+    runs-on: ubuntu-latest
+    outputs:
+      ecr_repo_url: ${{ steps.outputs.outputs.ecr_repo_url }}
+      ecs_cluster_name: ${{ steps.outputs.outputs.ecs_cluster_name }}
+      ecs_service_name: ${{ steps.outputs.outputs.ecs_service_name }}
+      task_definition_family: ${{ steps.outputs.outputs.task_definition_family }}
+      alb_dns_name: ${{ steps.outputs.outputs.alb_dns_name }}
+      container_name: ${{ steps.outputs.outputs.container_name }}
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Terraform Init
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: terraform init -backend-config=backends/dev.hcl
+
+      - name: Export Terraform Outputs
+        id: outputs
+        working-directory: ${{ env.TERRAFORM_DIR }}
+        run: |
+          echo "ecr_repo_url=$(terraform output -raw ecr_repo_url)" >> $GITHUB_OUTPUT
+          echo "ecs_cluster_name=$(terraform output -raw ecs_cluster_name)" >> $GITHUB_OUTPUT
+          echo "ecs_service_name=$(terraform output -raw ecs_service_name)" >> $GITHUB_OUTPUT
+          echo "task_definition_family=$(terraform output -raw task_definition_family)" >> $GITHUB_OUTPUT
+          echo "alb_dns_name=$(terraform output -raw alb_dns_name)" >> $GITHUB_OUTPUT
+          echo "container_name=$(terraform output -raw container_name)" >> $GITHUB_OUTPUT
+
+###############################################################################
+# Context Ready
+###############################################################################
+
+  context-ready:
+    name: Infrastructure Context Ready
+
+    needs:
+      - load-existing-infrastructure-context
+      - load-new-infrastructure-context
+
+    if: |
+      always() &&
+      (
+        needs.load-existing-infrastructure-context.result == 'success' ||
+        needs.load-new-infrastructure-context.result == 'success'
+      )
+
+    runs-on: ubuntu-latest
+
+    outputs:
+      ecr_repo_url: ${{ steps.outputs.outputs.ecr_repo_url }}
+      ecs_cluster_name: ${{ steps.outputs.outputs.ecs_cluster_name }}
+      ecs_service_name: ${{ steps.outputs.outputs.ecs_service_name }}
+      task_definition_family: ${{ steps.outputs.outputs.task_definition_family }}
+      alb_dns_name: ${{ steps.outputs.outputs.alb_dns_name }}
+      container_name: ${{ steps.outputs.outputs.container_name }}
+
+    steps:
+
+      - id: outputs
+        run: |
+
+          if [ "${{ needs.load-existing-infrastructure-context.result }}" = "success" ]; then
+
+            echo "ecr_repo_url=${{ needs.load-existing-infrastructure-context.outputs.ecr_repo_url }}" >> $GITHUB_OUTPUT
+            echo "ecs_cluster_name=${{ needs.load-existing-infrastructure-context.outputs.ecs_cluster_name }}" >> $GITHUB_OUTPUT
+            echo "ecs_service_name=${{ needs.load-existing-infrastructure-context.outputs.ecs_service_name }}" >> $GITHUB_OUTPUT
+            echo "task_definition_family=${{ needs.load-existing-infrastructure-context.outputs.task_definition_family }}" >> $GITHUB_OUTPUT
+            echo "alb_dns_name=${{ needs.load-existing-infrastructure-context.outputs.alb_dns_name }}" >> $GITHUB_OUTPUT
+            echo "container_name=${{ needs.load-existing-infrastructure-context.outputs.container_name }}" >> $GITHUB_OUTPUT
+
+          else
+
+            echo "ecr_repo_url=${{ needs.load-new-infrastructure-context.outputs.ecr_repo_url }}" >> $GITHUB_OUTPUT
+            echo "ecs_cluster_name=${{ needs.load-new-infrastructure-context.outputs.ecs_cluster_name }}" >> $GITHUB_OUTPUT
+            echo "ecs_service_name=${{ needs.load-new-infrastructure-context.outputs.ecs_service_name }}" >> $GITHUB_OUTPUT
+            echo "task_definition_family=${{ needs.load-new-infrastructure-context.outputs.task_definition_family }}" >> $GITHUB_OUTPUT
+            echo "alb_dns_name=${{ needs.load-new-infrastructure-context.outputs.alb_dns_name }}" >> $GITHUB_OUTPUT
+            echo "container_name=${{ needs.load-new-infrastructure-context.outputs.container_name }}" >> $GITHUB_OUTPUT
+
+          fi
 
 ###############################################################################
 # Deploy Infrastructure
@@ -192,7 +374,7 @@ jobs:
     name: Build & Push Docker Image
     needs:
       - detect-changes
-      - load-infrastructure-context
+      - context-ready
       - deploy-infrastructure
     if: |
       always() &&
@@ -224,7 +406,7 @@ jobs:
       - name: Build and Push Image
         id: build
         env:
-          ECR_REPO: ${{ needs.load-infrastructure-context.outputs.ecr_repo_url }}
+          ECR_REPO: ${{ needs.context-ready.outputs.ecr_repo_url }}
         run: |
 
           IMAGE_URI=${ECR_REPO}:${GITHUB_SHA}
@@ -292,7 +474,7 @@ jobs:
     needs:
       - build-image
       - scan-image
-      - load-infrastructure-context
+      - context-ready
     if: |
       needs.build-image.result == 'success' &&
       needs.scan-image.result == 'success'
@@ -316,7 +498,7 @@ jobs:
       - name: Download Current Task Definition
         run: |
           aws ecs describe-task-definition \
-            --task-definition "${{ needs.load-infrastructure-context.outputs.task_definition_family }}" \
+            --task-definition "${{ needs.context-ready.outputs.task_definition_family }}" \
             --query taskDefinition \
             > task-definition.json
 
@@ -325,7 +507,7 @@ jobs:
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: task-definition.json
-          container-name: ${{ needs.load-infrastructure-context.outputs.container_name }}
+          container-name: ${{ needs.context-ready.outputs.container_name }}
           image: ${{ needs.build-image.outputs.image_uri }}
 
       - name: Deploy ECS Service
@@ -334,9 +516,9 @@ jobs:
         with:
           task-definition: ${{ steps.render.outputs.task-definition }}
 
-          cluster: ${{ needs.load-infrastructure-context.outputs.ecs_cluster_name }}
+          cluster: ${{ needs.context-ready.outputs.ecs_cluster_name }}
 
-          service: ${{ needs.load-infrastructure-context.outputs.ecs_service_name }}
+          service: ${{ needs.context-ready.outputs.ecs_service_name }}
 
           wait-for-service-stability: true
 
@@ -356,6 +538,7 @@ jobs:
     name: Smoke Test
     needs:
       - deploy-application
+      - context-ready
     if: |
       needs.deploy-application.result == 'success'
     runs-on: ubuntu-latest
@@ -377,7 +560,7 @@ jobs:
 
       - name: Health Check
         run: |
-          bash scripts/smoke-test.sh "http://${{ needs.load-infrastructure-context.outputs.alb_dns_name }}"
+          bash scripts/smoke-test.sh "http://${{ needs.context-ready.outputs.alb_dns_name }}"
 
       - name: Smoke Test Summary
         run: |
@@ -396,7 +579,7 @@ jobs:
     needs:
       - deploy-application
       - smoke-test
-      - load-infrastructure-context
+      - context-ready
     if: |
       always() &&
       needs.deploy-application.result == 'success' &&
@@ -417,7 +600,7 @@ jobs:
         run: |
 
           PREVIOUS=$(aws ecs list-task-definitions \
-            --family-prefix "${{ needs.load-infrastructure-context.outputs.task_definition_family }}" \
+            --family-prefix "${{ needs.context-ready.outputs.task_definition_family }}" \
             --sort DESC \
             --max-items 2 \
             --query 'taskDefinitionArns[1]' \
@@ -433,15 +616,15 @@ jobs:
 
           task-definition: ${{ steps.rollback.outputs.previous }}
 
-          cluster: ${{ needs.load-infrastructure-context.outputs.ecs_cluster_name }}
+          cluster: ${{ needs.context-ready.outputs.ecs_cluster_name }}
 
-          service: ${{ needs.load-infrastructure-context.outputs.ecs_service_name }}
+          service: ${{ needs.context-ready.outputs.ecs_service_name }}
 
           wait-for-service-stability: true
 
       - name: Verify Rollback
         run: |
-          bash scripts/smoke-test.sh "http://${{ needs.load-infrastructure-context.outputs.alb_dns_name }}"
+          bash scripts/smoke-test.sh "http://${{ needs.context-ready.outputs.alb_dns_name }}"
 
       - name: Rollback Summary
         run: |
