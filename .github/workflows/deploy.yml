@@ -400,7 +400,7 @@ jobs:
       - name: Download Current Task Definition
         run: |
           aws ecs describe-task-definition \
-            --task-definition "${{ needs.load-infrastructure-contex.outputs.task_definition_family }}" \
+            --task-definition "${{ needs.load-infrastructure-context.outputs.task_definition_family }}" \
             --query taskDefinition \
             > task-definition.json
 
@@ -409,7 +409,7 @@ jobs:
         uses: aws-actions/amazon-ecs-render-task-definition@v1
         with:
           task-definition: task-definition.json
-          container-name: ${{ needs.load-infrastructure-contex.outputs.container_name }}
+          container-name: ${{ needs.load-infrastructure-context.outputs.container_name }}
           image: ${{ needs.build-image.outputs.image_uri }}
 
       - name: Deploy ECS Service
@@ -418,9 +418,9 @@ jobs:
         with:
           task-definition: ${{ steps.render.outputs.task-definition }}
 
-          cluster: ${{ needs.load-infrastructure-contex.outputs.ecs_cluster_name }}
+          cluster: ${{ needs.load-infrastructure-context.outputs.ecs_cluster_name }}
 
-          service: ${{ needs.load-infrastructure-contex.outputs.ecs_service_name }}
+          service: ${{ needs.load-infrastructure-context.outputs.ecs_service_name }}
 
           wait-for-service-stability: true
 
