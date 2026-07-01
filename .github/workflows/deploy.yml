@@ -11,7 +11,6 @@ name: Production Deployment
 #   - workflow_dispatch
 #
 # Main Components:
-#   - Change Detection
 #   - Terraform Infrastructure Deployment
 #   - Infrastructure Context Loading
 #   - Docker Image Build & Push
@@ -21,37 +20,28 @@ name: Production Deployment
 #   - Automatic Rollback
 #
 # Outcome:
-#   Deploys infrastructure changes when required and releases a validated
+#   Deploys infrastructure and releases a validated
 #   application to AWS ECS with post-deployment verification.
 ###############################################################################
 
 ###############################################################################
 #
-#                         PRODUCTION DEPLOYMENT PIPELINE
+#                   PRODUCTION DEPLOYMENT PIPELINE
 #
 #
-#                           Detect Changes
-#                                 │
-#                ┌────────────────┴────────────────┐
-#                │                                 │
-#                ▼                                 ▼
-#      Deploy Infrastructure          Load Existing Context
-#                │                                 │
-#                ▼                                 │
-#        Load New Context                          │
-#                └───────────────┬─────────────────┘
+#                       Deploy infrastructure
+#                                |
 #                                ▼
-#                        Infrastructure
-#                        Context Ready
+#                      Infrastructure context
 #                                │
 #                                ▼
-#                    Build & Push Docker Image
+#                     Build & Push Docker Image
 #                                │
 #                                ▼
 #                         Scan Docker Image
 #                                │
 #                                ▼
-#                       Deploy Application
+#                        Deploy Application
 #                                │
 #                                ▼
 #                           Smoke Tests
@@ -59,19 +49,6 @@ name: Production Deployment
 #                                ▼
 #                     Automatic Rollback
 #
-#
-# Pipeline Logic
-# --------------
-#
-# • Application-only changes:
-#     Detect → Load Existing Context → Build → Scan → Deploy
-#
-# • Infrastructure changes:
-#     Detect → Terraform Apply → Load New Context → Build → Scan → Deploy
-#
-# • Context Ready exposes a single set of Terraform outputs so downstream
-#   jobs never need to know whether infrastructure already existed or was
-#   just created.
 #
 ###############################################################################
 
