@@ -30,49 +30,49 @@ The main objectives of this project were:
 ```text
      Developer
         │
-             ▼
+        ▼
      Git Push
         │
-             ▼
+        ▼
  GitHub Actions (CI)
-─────────────────────────────────
+──────────────────────
 • Quality Checks
 • Unit Tests
 • Integration Tests
-─────────────────────────────────
+──────────────────────
         │
-             ▼
+        ▼
 Production Deployment
-─────────────────────────────────
+──────────────────────
 Terraform Apply
         │
-             ▼
+        ▼
 Terraform Plan + Artifact
         │
-             ▼
+        ▼
 Load Infrastructure Context
         │
-             ▼
+        ▼
 Build Docker Image
         │
-             ▼
+        ▼
 Security Scan (Trivy)
         │
-             ▼
+        ▼
 Push Image to Amazon ECR
         │
-             ▼
+        ▼
 Deploy to Amazon ECS
         │
-             ▼
+        ▼
 Smoke Test (ALB)
         │
    ┌────┴────┐
    │         │
 Success   Failure
    │         │
-     ▼              ▼
- Complete  Automatic Rollback
+   ▼         ▼
+Complete  Automatic Rollback
 ```
 
 ---
@@ -178,15 +178,15 @@ The CI workflow contains four independent jobs that execute in parallel whenever
 ```text
                 Push / Pull Request
                         │
-                                        ▼
+                        ▼
                  Quality Checks
                         │
         ┌───────────────┼───────────────┐
-             ▼                         ▼                        ▼
+        ▼               ▼               ▼
    Unit Tests    Integration Tests   Docker Build
         │               │               │
         └───────────────┼───────────────┘
-                                        ▼
+                        ▼
                    CI Completed
 ```
 
@@ -261,27 +261,27 @@ The deployment pipeline performs:
 ```text
                    CI Successful
                          │
-                                         ▼
+                         ▼
                Deploy Infrastructure
                          │
-                                         ▼ 
+                         ▼ 
              Load Infrastructure Context
                          │
-                                         ▼
+                         ▼
              Build and Push Image to ECR
                          │
-                                         ▼
+                         ▼
                  Scan Docker Image
                          │
-                                         ▼
+                         ▼
                  Deploy ECS Service
                          │
-                                         ▼
+                         ▼
                   Run Smoke Tests
                          │
              ┌───────────┴───────────┐
              │                       │
-                      ▼                                     ▼
+             ▼                       ▼
         Deployment OK         Automatic Rollback
 ```
 
@@ -778,34 +778,34 @@ At the end of this project, the application can be delivered through a complete 
 ```text
 Developer
     │
-      ▼
+    ▼
 Git Push
     │
-      ▼
+    ▼
 Quality Checks
     │
-      ▼
+    ▼
 Automated Testing
     │
-      ▼
+    ▼
 Docker Build
     │
-      ▼
+    ▼
 Security Scanning
     │
       ▼
 Terraform Apply
     │
-      ▼
+    ▼
 Push Image to Amazon ECR
     │
-      ▼
+    ▼
 Deploy to Amazon ECS
     │
-      ▼
+    ▼
 Smoke Tests
     │
-      ▼
+    ▼
 Success ✅
     │
     └──────────────► Automatic / Manual Rollback if required
