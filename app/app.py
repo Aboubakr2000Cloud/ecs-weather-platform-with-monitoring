@@ -1,4 +1,5 @@
 import os
+import boto3
 import requests
 import pymysql
 import time
@@ -7,6 +8,7 @@ from datetime import datetime
 
 app = Flask(__name__)
 
+cloudwatch = boto3.client('cloudwatch', region_name=os.environ.get('AWS_REGION', 'eu-west-1'))
 
 def get_db():
     return pymysql.connect(
@@ -71,47 +73,74 @@ def health():
 
 @app.route("/weather/<city>")
 def get_weather(city):
-    api_key = os.environ.get("WEATHER_API_KEY")
-    url = "https://api.openweathermap.org/data/2.5/weather"
+    start = time.time()
 
-    response = requests.get(
-        url, params={"q": city, "appid": api_key, "units": "metric"}, timeout=10
-    )
+    try:
+        api_key = os.environ.get("WEATHER_API_KEY")
+        url = "https://api.openweathermap.org/data/2.5/weather"
 
-    if response.status_code != 200:
-        return jsonify({"error": f"City '{city}' not found"}), 404
-
-    data = response.json()
-    weather = {
-        "city": data["name"],
-        "country": data["sys"]["country"],
-        "temperature": data["main"]["temp"],
-        "feels_like": data["main"]["feels_like"],
-        "humidity": data["main"]["humidity"],
-        "description": data["weather"][0]["description"],
-        "fetched_at": datetime.utcnow().isoformat(),
-    }
-
-    # Store in DB
-    conn = get_db_with_retry()
-    with conn.cursor() as cursor:
-        cursor.execute(
-            """
-            INSERT INTO weather_log (city, country, temperature, humidity, description)
-            VALUES (%s, %s, %s, %s, %s)
-        """,
-            (
-                weather["city"],
-                weather["country"],
-                weather["temperature"],
-                weather["humidity"],
-                weather["description"],
-            ),
+        response = requests.get(
+            url, params={"q": city, "appid": api_key, "units": "metric"}, timeout=10
         )
-    conn.commit()
-    conn.close()
 
-    return jsonify(weather)
+        if response.status_code != 200:
+            return jsonify({"error": f"City '{city}' not found"}), 404
+
+        data = response.json()
+        weather = {
+            "city": data["name"],
+            "country": data["sys"]["country"],
+            "temperature": data["main"]["temp"],
+            "feels_like": data["main"]["feels_like"],
+            "humidity": data["main"]["humidity"],
+            "description": data["weather"][0]["description"],
+            "fetched_at": datetime.utcnow().isoformat(),
+        }
+
+        # Store in DB
+        conn = get_db_with_retry()
+        with conn.cursor() as cursor:
+            cursor.execute(
+                """
+                INSERT INTO weather_log (city, country, temperature, humidity, description)
+                VALUES (%s, %s, %s, %s, %s)
+                """,
+                (
+                    weather["city"],
+                    weather["country"],
+                    weather["temperature"],
+                    weather["humidity"],
+                    weather["description"],
+                ),
+            )
+        conn.commit()
+        conn.close()
+
+        publish_metric(
+            "WeatherFetched",
+            1,
+            dimensions=[
+                {"Name": "City", "Value": city}
+            ],
+        )
+
+        publish_metric(
+            "WeatherAPILatency",
+            (time.time() - start) * 1000,
+            unit="Milliseconds",
+        )
+
+        return jsonify(weather)
+
+    except Exception:
+        publish_metric(
+            "WeatherFetchError",
+            1,
+            dimensions=[
+                {"Name": "City", "Value": city}
+            ],
+        )
+        raise
 
 
 @app.route("/api/history")
@@ -139,6 +168,20 @@ def history():
 def index():
     return render_template("index.html")
 
+def publish_metric(name, value, unit='Count', dimensions=None):
+    try:
+        cloudwatch.put_metric_data(
+            Namespace='WeatherApp',
+            MetricData=[{
+                'MetricName': name,
+                'Value': value,
+                'Unit': unit,
+                'Timestamp': datetime.utcnow(),
+                'Dimensions': dimensions or []
+            }]
+        )
+    except Exception as e:
+        app.logger.warning(f"Failed to publish metric {name}: {e}")
 
 if __name__ == "__main__":
     init_db()

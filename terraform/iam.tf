@@ -89,3 +89,22 @@ resource "aws_secretsmanager_secret_version" "weather_api_key" {
   secret_id     = aws_secretsmanager_secret.weather_api_key.id
   secret_string = var.weather_api_key
 }
+
+resource "aws_iam_role_policy" "custom_metrics" {
+  name = "cloudwatch-custom-metrics"
+  role = aws_iam_role.ecs_task.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect   = "Allow"
+      Action   = ["cloudwatch:PutMetricData"]
+      Resource = "*"
+      Condition = {
+        StringEquals = {
+          "cloudwatch:namespace" = "WeatherApp"
+        }
+      }
+    }]
+  })
+}

@@ -29,7 +29,7 @@ resource "aws_ecs_cluster" "this" {
 # CloudWatch Log Group
 resource "aws_cloudwatch_log_group" "this" {
   name              = "/ecs/${var.name_prefix}"
-  retention_in_days = 7
+  retention_in_days = 30
 }
 
 # Task Definition

@@ -54,10 +54,34 @@ output "ecs_service_name" {
   value = module.ecs.service_name
 }
 
+output "log_group_name" {
+  value = module.ecs.log_group_name
+}
+
 output "task_definition_family" {
   value = module.ecs.task_definition_family
 }
 
 output "container_name" {
   value = var.container_name
+}
+
+output "monitoring_dashboard" {
+  description = "CloudWatch monitoring dashboard"
+  value       = module.monitoring.dashboard_name
+}
+
+output "monitoring_dashboard_arn" {
+  description = "CloudWatch monitoring dashboard ARN"
+  value       = module.monitoring.dashboard_arn
+}
+
+output "alerts_sns_topic" {
+  description = "SNS topic for monitoring alerts"
+  value       = module.monitoring.sns_topic_arn
+}
+
+output "budget_name" {
+  description = "Monthly AWS budget"
+  value       = module.monitoring.budget_name
 }

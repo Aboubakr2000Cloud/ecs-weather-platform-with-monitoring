@@ -78,3 +78,18 @@ module "ecs" {
   desired_count       = var.ecs_desired_count
 }
 
+# ── CLOUDWATCH ───────────────────────────────────────────────────────────
+module "monitoring" {
+  source = "./modules/monitoring"
+
+  name_prefix            = local.name_prefix
+  monitor_prefix         = local.monitor_prefix
+  alert_email            = var.alert_email
+  region                 = var.region
+  ecs_cluster_name       = module.ecs.cluster_name
+  ecs_service_name       = module.ecs.service_name
+  alb_arn_suffix         = module.alb.alb_arn_suffix
+  db_instance_identifier = module.rds.db_instance_identifier
+  log_group_name         = module.ecs.log_group_name
+  common_tags            = local.common_tags
+}

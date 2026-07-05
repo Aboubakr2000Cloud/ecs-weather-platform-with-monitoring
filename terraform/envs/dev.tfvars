@@ -12,6 +12,7 @@ service_name    = "weather-app"
 repository_name = "weather-app"
 container_name  = "weather-app"
 
+alert_email = "aboubacre.ijannane@gmail.com"
 
 ecs_desired_count = 2
 

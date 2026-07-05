@@ -71,4 +71,7 @@ variable "weather_api_key" {
   sensitive = true
 }
 
+variable "alert_email" {
+  type = string
+}
 
