@@ -8,7 +8,10 @@ from datetime import datetime
 
 app = Flask(__name__)
 
-cloudwatch = boto3.client('cloudwatch', region_name=os.environ.get('AWS_REGION', 'eu-west-1'))
+cloudwatch = boto3.client(
+    "cloudwatch", region_name=os.environ.get("AWS_REGION", "eu-west-1")
+)
+
 
 def get_db():
     return pymysql.connect(
@@ -119,9 +122,7 @@ def get_weather(city):
         publish_metric(
             "WeatherFetched",
             1,
-            dimensions=[
-                {"Name": "City", "Value": city}
-            ],
+            dimensions=[{"Name": "City", "Value": city}],
         )
 
         publish_metric(
@@ -136,9 +137,7 @@ def get_weather(city):
         publish_metric(
             "WeatherFetchError",
             1,
-            dimensions=[
-                {"Name": "City", "Value": city}
-            ],
+            dimensions=[{"Name": "City", "Value": city}],
         )
         raise
 
@@ -168,20 +167,24 @@ def history():
 def index():
     return render_template("index.html")
 
-def publish_metric(name, value, unit='Count', dimensions=None):
+
+def publish_metric(name, value, unit="Count", dimensions=None):
     try:
         cloudwatch.put_metric_data(
-            Namespace='WeatherApp',
-            MetricData=[{
-                'MetricName': name,
-                'Value': value,
-                'Unit': unit,
-                'Timestamp': datetime.utcnow(),
-                'Dimensions': dimensions or []
-            }]
+            Namespace="WeatherApp",
+            MetricData=[
+                {
+                    "MetricName": name,
+                    "Value": value,
+                    "Unit": unit,
+                    "Timestamp": datetime.utcnow(),
+                    "Dimensions": dimensions or [],
+                }
+            ],
         )
     except Exception as e:
         app.logger.warning(f"Failed to publish metric {name}: {e}")
+
 
 if __name__ == "__main__":
     init_db()
