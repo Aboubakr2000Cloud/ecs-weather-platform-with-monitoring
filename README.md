@@ -1,6 +1,6 @@
 # ☁️ ECS Weather Platform – Monitoring & Observability
 
-> Week 20 Project – Building a complete monitoring and observability stack for a production-style AWS ECS application using Terraform, Amazon CloudWatch, Amazon SNS, CloudWatch Logs Insights, Custom Metrics, and AWS Budgets.
+Building a complete monitoring and observability stack for a production-style AWS ECS application using Terraform, Amazon CloudWatch, Amazon SNS, CloudWatch Logs Insights, Custom Metrics, and AWS Budgets.
 
 ---
 

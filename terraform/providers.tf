@@ -19,7 +19,6 @@ provider "aws" {
       Project     = "ecs-weather-platform"
       Environment = var.environment
       ManagedBy   = "terraform"
-      Week        = "18"
     }
   }
 }
