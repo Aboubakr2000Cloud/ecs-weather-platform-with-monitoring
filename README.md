@@ -90,33 +90,34 @@ Terraform --> Infrastructure
 
 Infrastructure --> ALB[Application Load Balancer]
 Infrastructure --> ECS[ECS Fargate Service]
-Infrastructure --> RDS[(Amazon RDS)]
+Infrastructure --> RDS[Amazon RDS]
 Infrastructure --> SNS[SNS Alerts]
 Infrastructure --> Budget[AWS Budget]
 
 Internet --> ALB
 ALB --> ECS
+
 ECS --> RDS
 ECS --> OpenWeather[OpenWeatherMap API]
 
 ECS --> Logs[CloudWatch Logs]
 ECS --> Metrics[CloudWatch Metrics]
-ECS --> Custom[Custom Metrics]
+ECS --> CustomMetrics[Custom Metrics]
 
 ALB --> Metrics
 RDS --> Metrics
 
 Logs --> CloudWatch
 Metrics --> CloudWatch
-Custom --> CloudWatch
+CustomMetrics --> CloudWatch
 
 CloudWatch --> Dashboard[CloudWatch Dashboard]
-CloudWatch --> Insights[Logs Insights]
-CloudWatch --> Alarms[CloudWatch Alarms]
+CloudWatch --> LogsInsights[Logs Insights]
+CloudWatch --> CWAlarms[CloudWatch Alarms]
 
-Alarms --> Composite[Composite Alarm]
+CWAlarms --> Composite[Composite Alarm]
 Composite --> SNS
-Alarms --> SNS
+CWAlarms --> SNS
 
 SNS --> Email[Email Notifications]
 
