@@ -1,5 +1,14 @@
 # ☁️ ECS Weather Platform – Monitoring & Observability
 
+![Terraform](https://img.shields.io/badge/Terraform-IaC-623CE4?style=for-the-badge&logo=terraform)
+![Amazon CloudWatch](https://img.shields.io/badge/AWS-CloudWatch-FF9900?style=for-the-badge&logo=amazonaws)
+![Amazon SNS](https://img.shields.io/badge/AWS-SNS_Alerts-FF9900?style=for-the-badge&logo=amazonaws)
+![CloudWatch Alarms](https://img.shields.io/badge/CloudWatch-Metric_Alarms-FF9900?style=for-the-badge&logo=amazonaws)
+![CloudWatch Dashboard](https://img.shields.io/badge/CloudWatch-Dashboard-FF9900?style=for-the-badge&logo=amazonaws)
+![Container Insights](https://img.shields.io/badge/AWS-Container_Insights-FF9900?style=for-the-badge&logo=amazonaws)
+![Logs Insights](https://img.shields.io/badge/CloudWatch-Logs_Insights-FF9900?style=for-the-badge&logo=amazonaws)
+![AWS Budgets](https://img.shields.io/badge/AWS-Budgets-FF9900?style=for-the-badge&logo=amazonaws)
+
 Building a complete monitoring and observability stack for a production-style AWS ECS application using Terraform, Amazon CloudWatch, Amazon SNS, CloudWatch Logs Insights, Custom Metrics, and AWS Budgets.
 
 ---
@@ -68,6 +77,50 @@ AWS Budgets
         │
         ▼
 Cost Notifications
+```
+
+---
+
+# 🏗️ High-Level Architecture
+
+```mermaid
+flowchart TD
+
+Terraform --> Infrastructure
+
+Infrastructure --> ALB[Application Load Balancer]
+Infrastructure --> ECS[ECS Fargate Service]
+Infrastructure --> RDS[(Amazon RDS)]
+Infrastructure --> SNS[SNS Alerts]
+Infrastructure --> Budget[AWS Budget]
+
+Internet --> ALB
+ALB --> ECS
+ECS --> RDS
+ECS --> OpenWeather[OpenWeatherMap API]
+
+ECS --> Logs[CloudWatch Logs]
+ECS --> Metrics[CloudWatch Metrics]
+ECS --> Custom[Custom Metrics]
+
+ALB --> Metrics
+RDS --> Metrics
+
+Logs --> CloudWatch
+Metrics --> CloudWatch
+Custom --> CloudWatch
+
+CloudWatch --> Dashboard[CloudWatch Dashboard]
+CloudWatch --> Insights[Logs Insights]
+CloudWatch --> Alarms[CloudWatch Alarms]
+
+Alarms --> Composite[Composite Alarm]
+Composite --> SNS
+Alarms --> SNS
+
+SNS --> Email[Email Notifications]
+
+Budget --> SNS
 ```
 
 ---
