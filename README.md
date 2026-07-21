@@ -21,6 +21,8 @@ Instead of simply deploying infrastructure, the platform now provides visibility
 
 Everything is fully provisioned using **Terraform**.
 
+> This project evolved through several stages — this version adds monitoring. See [ecs-weather-platform-secured](https://github.com/Aboubakr2000Cloud/ecs-weather-platform-secured) for the current, fully hardened version.
+
 ---
 
 # 🏗️ Architecture
